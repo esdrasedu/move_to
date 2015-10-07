@@ -1,27 +1,32 @@
 defmodule MoveTo do
-
   def watch(src, dst, re) do
     files = File.ls!(src)
     regex = Regex.compile!(re)
-    Enum.filter(files, &(Regex.match?(regex, &1)))
+    Enum.map(files, &(Path.expand("#{src}/#{&1}")))
+    |> Enum.filter(&(Regex.match?(regex, &1)))
     |> Enum.each(fn(file)->
       dst_end = Regex.replace(regex, file, dst)
-      IO.puts "#{file} -> #{dst_end}"
-    end) 
+      case File.rename(file, dst_end) do
+        :ok ->
+          IO.puts "[SUCCESS] #{file} -> #{dst_end}"
+        {:error, _reason} ->
+          IO.puts "[FAILED] #{file} -> #{dst_end}"
+      end
+    end)
   end
+end
 
-  def move([src_file|src_files], [dst_file|dst_files]) do
-    File.rename(src_file, dst_file)
-    move(src_files, dst_files)
+watch = fn(arg, time, func) ->
+  spawn_link(MoveTo, :watch, arg)
+  if time > 0 do
+    :timer.sleep(time)
+    func.(arg, time, func)
   end
-
-  def move([], []), do: IO.puts "End move"
-
 end
 
 case System.argv do
-  [src, dst, re] ->
-    spawn_link(MoveTo, :watch, [src, dst, re])
+  [_src, _dst, _re] ->
+    watch.(System.argv, 1000, watch)
   _ ->
     IO.puts "move_on [source] [destination] [regular_expression]"
 end
